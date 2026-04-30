@@ -1,0 +1,5 @@
+{
+  "last_id": "groningen-9743ae-229-45-friesestraatweg-cdb1f2e3cdb783d369434f22be62540d",
+  "last_date": "",
+  "last_title": "Appartement Friesestraatweg 229 45"
+}

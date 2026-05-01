@@ -11,7 +11,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     fonts-liberation \
     libnss3 \
-    libgconf-2-4 \
     libxss1 \
     libasound2 \
     libatk-bridge2.0-0 \

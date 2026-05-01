@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.zip
+*.exe
+.DS_Store
+.env
+last_listing.txt
+watcher.log

@@ -1,46 +1,30 @@
-# syntax=docker/dockerfile:1
-#
-# selenium/standalone-chrome bundles version-matched Chrome + ChromeDriver.
-# To update both at once: docker build --pull ... (pulls latest image)
-# Tags: https://hub.docker.com/r/selenium/standalone-chrome/tags
-# Base image includes Selenium, Chrome, and ChromeDriver for browser automation
-FROM selenium/standalone-chrome:latest
+FROM python:3.12-slim
 
-USER root
+WORKDIR /app
 
-# Install Python 3 and create a virtual environment for the app
-RUN echo "[Docker build] Installing Python and runtime prerequisites..."
-RUN apt-get update -qq && \
-    apt-get install -y -qq --no-install-recommends \
-    python3 \
-    python3-venv \
-    python3-pip \
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    chromium-driver \
+    ca-certificates \
+    fonts-liberation \
+    libnss3 \
+    libgconf-2-4 \
+    libxss1 \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libgtk-3-0 \
+    libgbm1 \
+    libx11-xcb1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory inside the container for application files
-WORKDIR /root/scraper
-RUN echo "[Docker build] Working directory set to /root/scraper"
-
-# Install Python dependencies into a virtual environment
 COPY requirements.txt .
-RUN python3 -m venv .venv && \
-    .venv/bin/pip install --quiet --upgrade pip && \
-    .venv/bin/pip install --quiet -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the application source files into the image
-COPY watcher.py .
-COPY chromedriver_manager.py .
+COPY . .
 
-# Mount /data from the host so secrets and state persist outside the container
-#   .env              — all configuration (required)
-#   last_listing.txt  — persisted state (written by the app)
-#   watcher.log       — CRITICAL-only log (written by the app)
-VOLUME ["/data"]
+ENV CHROME_BINARY=/usr/bin/chromium
 
-# Set runtime environment to Docker mode
-ENV DOCKER=true
-
-# Use CMD instead of ENTRYPOINT to preserve the base image's Selenium Grid startup
-# The base image (selenium/standalone-chrome) will start Selenium Grid first,
-# then run our watcher script after
-CMD [".venv/bin/python", "watcher.py"]
+CMD ["python", "watcher.py"]

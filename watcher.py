@@ -174,14 +174,30 @@ def save_state(states: dict) -> None:
 # ---------------------------------------------------------------------------
 # Chrome driver
 # ---------------------------------------------------------------------------
-def build_driver() -> webdriver.Chrome:
-    chrome_binary = CHROME_BINARY or _detect_chrome_binary()
-    logger.info(f"Chrome: {chrome_binary} | headless={HEADLESS} | docker={IS_DOCKER}")
+SELENIUM_GRID_URL = "http://localhost:4444/wd/hub"
 
+
+def _wait_for_grid(timeout: int = 30) -> None:
+    """Block until the Selenium Grid inside the container is accepting sessions."""
+    import urllib.request
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            urllib.request.urlopen(f"{SELENIUM_GRID_URL}/status", timeout=2)
+            return
+        except Exception:
+            time.sleep(1)
+    raise RuntimeError(f"Selenium Grid not ready after {timeout}s.")
+
+
+def _build_options() -> Options:
     options = Options()
-    options.binary_location = chrome_binary
 
-    if HEADLESS:
+    if not IS_DOCKER:
+        chrome_binary = CHROME_BINARY or _detect_chrome_binary()
+        options.binary_location = chrome_binary
+
+    if HEADLESS or IS_DOCKER:
         options.add_argument("--headless=new")
 
     options.add_argument("--no-sandbox")
@@ -193,8 +209,6 @@ def build_driver() -> webdriver.Chrome:
     options.add_argument("--window-size=1920,1080")
 
     if not IS_WINDOWS:
-        options.add_argument("--single-process")
-        options.add_argument("--memory-pressure-off")
         options.add_argument("--js-flags=--max-old-space-size=256")
         options.add_argument(
             "--user-agent=Mozilla/5.0 (X11; Linux x86_64) "
@@ -202,8 +216,25 @@ def build_driver() -> webdriver.Chrome:
             "Chrome/124.0.0.0 Safari/537.36"
         )
 
-    service = Service(executable_path=CHROMEDRIVER_PATH)
-    driver = webdriver.Chrome(service=service, options=options)
+    return options
+
+
+def build_driver():
+    options = _build_options()
+
+    if IS_DOCKER:
+        logger.info(f"Docker — connecting to Selenium Grid at {SELENIUM_GRID_URL}")
+        _wait_for_grid()
+        driver = webdriver.Remote(
+            command_executor=SELENIUM_GRID_URL,
+            options=options,
+        )
+    else:
+        chrome_binary = CHROME_BINARY or _detect_chrome_binary()
+        logger.info(f"Local — Chrome: {chrome_binary} | headless={HEADLESS}")
+        service = Service(executable_path=CHROMEDRIVER_PATH)
+        driver  = webdriver.Chrome(service=service, options=options)
+
     driver.set_page_load_timeout(PAGE_LOAD_TIMEOUT)
     return driver
 

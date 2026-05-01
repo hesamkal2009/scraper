@@ -20,13 +20,13 @@ deploy:
 # Quick deployment without pushing local git changes
 deploy-quick:
 	@echo "[make deploy-quick] Pulling latest code and restarting remote container..."
-	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'cd /root/HouseCheckerV2 && git pull origin main && docker build -t mvgm-watcher:latest . && docker restart mvgm-watcher'
+	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'cd /root/HouseCheckerV2 && git pull origin main && docker build -t HouseCheckerV2:latest . && docker restart HouseCheckerV2'
 	@echo "✓ Quick deployment complete!"
 
 # Tail the remote container logs for live debugging
 logs:
 	@echo "[make logs] Streaming remote container logs..."
-	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker logs -f mvgm-watcher'
+	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker logs -f HouseCheckerV2'
 
 # Open an interactive SSH shell on the remote server
 ssh:
@@ -36,11 +36,11 @@ ssh:
 # Stop the running remote container if present
 stop:
 	@echo "[make stop] Stopping remote container..."
-	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker stop mvgm-watcher'
+	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker stop HouseCheckerV2'
 	@echo "✓ Container stopped"
 
 # Restart the remote container using the existing image
 restart:
 	@echo "[make restart] Restarting remote container..."
-	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker restart mvgm-watcher'
+	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker restart HouseCheckerV2'
 	@echo "✓ Container restarted"

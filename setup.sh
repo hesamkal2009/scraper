@@ -5,7 +5,7 @@ set -euo pipefail
 
 DEPLOY_DIR="/root/HouseCheckerV2"
 DATA_DIR="$DEPLOY_DIR/data"
-IMAGE_NAME="mvgm-watcher"
+IMAGE_NAME="HouseCheckerV2"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "=== MVGM Housing Watcher Setup ==="
@@ -60,7 +60,7 @@ echo "[3/4] Docker build completed successfully."
 echo "[4/4] Installing cron job (every 5 minutes)..."
 
 CRON_CMD="*/5 * * * * docker run --rm -v $DATA_DIR:/data $IMAGE_NAME >> $DATA_DIR/cron.log 2>&1"
-CRON_MARKER="# mvgm-watcher"
+CRON_MARKER="# HouseCheckerV2"
 
 ( crontab -l 2>/dev/null | grep -v "$CRON_MARKER"; echo "$CRON_CMD $CRON_MARKER" ) | crontab -
 echo "    Cron installed."

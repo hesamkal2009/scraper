@@ -4,6 +4,7 @@ import json
 import logging
 import platform
 import requests
+import time
 
 from datetime import datetime
 from dotenv import load_dotenv
@@ -14,6 +15,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
+from selenium.webdriver.common.keys import Keys
 
 from chromedriver_manager import ensure_chromedriver
 
@@ -21,7 +23,7 @@ from chromedriver_manager import ensure_chromedriver
 # Bootstrap — load .env from /data (Docker) or script dir (local/Windows)
 # ---------------------------------------------------------------------------
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-IS_DOCKER  = os.getenv("DOCKER", "false").strip().lower() == "true"
+IS_DOCKER = os.getenv("DOCKER", "false").strip().lower() == "true"
 IS_WINDOWS = platform.system() == "Windows"
 
 _env_path = "/data/.env" if IS_DOCKER else os.path.join(SCRIPT_DIR, ".env")
@@ -30,21 +32,27 @@ load_dotenv(_env_path)
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-TELEGRAM_BOT_TOKEN   = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID     = os.getenv("TELEGRAM_CHAT_ID")
-TARGET_URL           = os.getenv("TARGET_URL", "https://ikwilhuren.nu/")
-PAGE_LOAD_TIMEOUT    = int(os.getenv("PAGE_LOAD_TIMEOUT", "30"))
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TARGET_URL = os.getenv("TARGET_URL", "https://ikwilhuren.nu/")
+PAGE_LOAD_TIMEOUT = int(os.getenv("PAGE_LOAD_TIMEOUT", "30"))
 ELEMENT_WAIT_TIMEOUT = int(os.getenv("ELEMENT_WAIT_TIMEOUT", "15"))
-HEADLESS             = os.getenv("HEADLESS", "true").strip().lower() == "true"
-CHROME_BINARY        = os.getenv("CHROME_BINARY", "")  # empty = auto-detect
+HEADLESS = os.getenv("HEADLESS", "true").strip().lower() == "true"
+CHROME_BINARY = os.getenv("CHROME_BINARY", "")  # empty = auto-detect
 
 # Paths — Docker uses /data for all persistent files; local uses script dir
-_data_dir         = "/data" if IS_DOCKER else SCRIPT_DIR
-STATE_FILE        = os.getenv("STATE_FILE",        os.path.join(_data_dir, "last_listing.txt"))
-LOG_FILE          = os.getenv("LOG_FILE",          os.path.join(_data_dir, "watcher.log"))
-CHROMEDRIVER_PATH = os.getenv("CHROMEDRIVER_PATH",
-    "/usr/bin/chromedriver" if IS_DOCKER else
-    os.path.join(SCRIPT_DIR, "chromedriver.exe" if IS_WINDOWS else "chromedriver")
+_data_dir = "/data" if IS_DOCKER else SCRIPT_DIR
+STATE_FILE = os.getenv("STATE_FILE", os.path.join(_data_dir, "last_listing.txt"))
+LOG_FILE = os.getenv("LOG_FILE", os.path.join(_data_dir, "watcher.log"))
+CHROMEDRIVER_PATH = os.getenv(
+    "CHROMEDRIVER_PATH",
+    (
+        "/usr/bin/chromedriver"
+        if IS_DOCKER
+        else os.path.join(
+            SCRIPT_DIR, "chromedriver.exe" if IS_WINDOWS else "chromedriver"
+        )
+    ),
 )
 
 # ---------------------------------------------------------------------------
@@ -82,9 +90,18 @@ def _detect_chrome_binary() -> str:
 
     if IS_WINDOWS:
         candidates = [
-            os.path.join(os.environ.get("PROGRAMFILES",      "C:\\Program Files"),       "Google\\Chrome\\Application\\chrome.exe"),
-            os.path.join(os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)"), "Google\\Chrome\\Application\\chrome.exe"),
-            os.path.join(os.environ.get("LOCALAPPDATA",      ""),                         "Google\\Chrome\\Application\\chrome.exe"),
+            os.path.join(
+                os.environ.get("PROGRAMFILES", "C:\\Program Files"),
+                "Google\\Chrome\\Application\\chrome.exe",
+            ),
+            os.path.join(
+                os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)"),
+                "Google\\Chrome\\Application\\chrome.exe",
+            ),
+            os.path.join(
+                os.environ.get("LOCALAPPDATA", ""),
+                "Google\\Chrome\\Application\\chrome.exe",
+            ),
         ]
     else:
         candidates = [
@@ -111,11 +128,11 @@ def send_telegram(message: str) -> None:
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         logger.critical("Telegram credentials not configured.")
         return
-    url     = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
-        "chat_id":                  TELEGRAM_CHAT_ID,
-        "text":                     message,
-        "parse_mode":               "HTML",
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "HTML",
         "disable_web_page_preview": False,
     }
     try:
@@ -141,8 +158,15 @@ def load_state() -> dict:
 
 def save_state(state: dict) -> None:
     os.makedirs(os.path.dirname(STATE_FILE) or ".", exist_ok=True)
+
+    # 1. Sort and slice the items first
+    # 2. Convert back to a dict
+    # 3. Assign it to a variable (or overwrite 'state')
+    sorted_items = sorted(state.items(), key=lambda item: item[1]["date"], reverse=True)
+    top_100_state = dict(sorted_items[:10])
+
     with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2)
+        json.dump(top_100_state, f, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +188,7 @@ def build_driver() -> webdriver.Chrome:
     options.add_argument("--disable-extensions")
     options.add_argument("--disable-software-rasterizer")
     options.add_argument("--disable-background-networking")
-    options.add_argument("--window-size=1280,900")
+    options.add_argument("--window-size=1920,1080")
 
     if not IS_WINDOWS:
         options.add_argument("--single-process")
@@ -177,7 +201,7 @@ def build_driver() -> webdriver.Chrome:
         )
 
     service = Service(executable_path=CHROMEDRIVER_PATH)
-    driver  = webdriver.Chrome(service=service, options=options)
+    driver = webdriver.Chrome(service=service, options=options)
     driver.set_page_load_timeout(PAGE_LOAD_TIMEOUT)
     return driver
 
@@ -202,8 +226,123 @@ def scrape_listings(driver: webdriver.Chrome) -> list[dict]:
         "div.property-item, div.listing-item, article.property, "
         "div[class*='woning'], div[class*='listing']"
     )
+
+    for _ in range(11):
+        driver.switch_to.active_element.send_keys(Keys.TAB)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    driver.switch_to.active_element.send_keys("Utrecht, Utrecht, Utrecht")
+    time.sleep(3)
+    driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    driver.switch_to.active_element.send_keys(Keys.TAB)
+    driver.switch_to.active_element.send_keys(Keys.TAB)
+    driver.switch_to.active_element.click()
+
+    # repeat task from for again when page loads eagain
+    for _ in range(11):
+        driver.switch_to.active_element.send_keys(Keys.TAB)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    driver.switch_to.active_element.send_keys("Utrecht, Utrecht, Utrecht")
+    time.sleep(3)
+    driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    driver.switch_to.active_element.send_keys(Keys.TAB)
+    driver.switch_to.active_element.send_keys(Keys.TAB)
+    driver.switch_to.active_element.click()
+
+    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, CARD_SELECTOR)))
+
+    # Go to filter section
+    for _ in range(17):
+        driver.switch_to.active_element.send_keys(Keys.TAB)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+
+    # Select From Price
+    for _ in range(7):
+        driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    driver.switch_to.active_element.send_keys(Keys.TAB)
+    # End Select From Price
+
+    # Select To Price
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    for _ in range(10):
+        driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    driver.switch_to.active_element.send_keys(Keys.TAB)
+    # End Select To Price
+
+    # Select From Living Space
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    for _ in range(2):
+        driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    driver.switch_to.active_element.send_keys(Keys.TAB)
+    # End Select From Living Space
+
+    # Select To Property Type
+    driver.switch_to.active_element.send_keys(Keys.TAB)
+
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    for _ in range(2):
+        driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    # End Select To Property Type
+
+    # Select Apartment Type
+    driver.switch_to.active_element.send_keys(Keys.TAB)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+
+    for _ in range(2):
+        driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    # End Select Apartment Type
+
+    # Select Bedrooms
+    driver.switch_to.active_element.send_keys(Keys.TAB)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    for _ in range(2):
+        driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    # End Select Bedrooms
+
+    # Apply filters
+    for _ in range(4):
+        driver.switch_to.active_element.send_keys(Keys.TAB)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    # Apply filters
+
+    time.sleep(4)  # wait for filters to apply and page to reload
+
+    # Set Sort to Newest
+    for _ in range(25):
+        driver.switch_to.active_element.send_keys(Keys.TAB)
+    time.sleep(3)  # wait for filters to apply and page to reload
+    for _ in range(2):
+        driver.switch_to.active_element.send_keys(Keys.TAB)
+    time.sleep(3)  # wait for filters to apply and page to reload
+
+    if driver.switch_to.active_element.get_attribute("href").startswith(
+        "/aanbod/?page="
+    ):
+        # get the number after page=
+        current_page = int(
+            driver.switch_to.active_element.get_attribute("href").split("page=")[-1]
+        )
+        driver.switch_to.active_element.send_keys(
+            Keys.TAB, backwards=True, repeat=current_page
+        )
+
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+
+    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, CARD_SELECTOR)))
+
     try:
-        wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, CARD_SELECTOR)))
+        wait.until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, CARD_SELECTOR))
+        )
     except TimeoutException:
         logger.critical(
             f"Timed out waiting for listing cards. Page snippet:\n{driver.page_source[:3000]}"
@@ -238,9 +377,16 @@ def _parse_card(card) -> dict | None:
     )
 
     title = ""
-    for sel in ["h2", "h3", ".title", ".property-title", ".woning-title", "[class*='title']"]:
+    for sel in [
+        "h2",
+        "h3",
+        ".title",
+        ".property-title",
+        ".woning-title",
+        "[class*='title']",
+    ]:
         try:
-            el    = card.find_element(By.CSS_SELECTOR, sel)
+            el = card.find_element(By.CSS_SELECTOR, sel)
             title = el.text.strip()
             if title:
                 break
@@ -250,7 +396,7 @@ def _parse_card(card) -> dict | None:
     price = ""
     for sel in [".price", "[class*='price']", ".huurprijs", "span[class*='rent']"]:
         try:
-            el    = card.find_element(By.CSS_SELECTOR, sel)
+            el = card.find_element(By.CSS_SELECTOR, sel)
             price = el.text.strip()
             if price:
                 break
@@ -260,7 +406,7 @@ def _parse_card(card) -> dict | None:
     date_str = ""
     for sel in ["time", "[datetime]", "[class*='date']", "[class*='datum']"]:
         try:
-            el       = card.find_element(By.CSS_SELECTOR, sel)
+            el = card.find_element(By.CSS_SELECTOR, sel)
             date_str = el.get_attribute("datetime") or el.text.strip()
             if date_str:
                 break
@@ -270,7 +416,7 @@ def _parse_card(card) -> dict | None:
     url = ""
     for sel in ["a", "a.property-link", "a[href*='woning']", "a[href*='huur']"]:
         try:
-            el  = card.find_element(By.CSS_SELECTOR, sel)
+            el = card.find_element(By.CSS_SELECTOR, sel)
             url = el.get_attribute("href") or ""
             if url:
                 break
@@ -284,11 +430,11 @@ def _parse_card(card) -> dict | None:
         return None
 
     return {
-        "id":    listing_id or title,
+        "id": listing_id or title,
         "title": title,
         "price": price,
-        "date":  date_str,
-        "url":   url,
+        "date": date_str,
+        "url": url,
     }
 
 
@@ -304,7 +450,7 @@ def run_check() -> None:
 
     driver = None
     try:
-        driver   = build_driver()
+        driver = build_driver()
         listings = scrape_listings(driver)
     except WebDriverException as e:
         logger.critical(f"WebDriver error: {e}")
@@ -317,45 +463,33 @@ def run_check() -> None:
         logger.critical("No listings found — selectors likely need updating.")
         return
 
-    newest  = listings[0]
-    logger.info(f"Newest: {newest['id']} | {newest['title']} | {newest['date']}")
-
-    state   = load_state()
-    last_id = state.get("last_id")
-
-    if last_id is None:
-        logger.info("First run — saving baseline, no notification sent.")
-        save_state({
-            "last_id":    newest["id"],
-            "last_date":  newest["date"],
-            "last_title": newest["title"],
-        })
+    states = load_state()
+    if not states:
+        for listing in listings:
+            states[listing["id"]] = {
+                "last_check": datetime.now().isoformat(),
+                "title": listing["title"],
+                "date": listing["date"],
+                "price": listing["price"],
+                "url": listing["url"],
+            }
+        save_state(states)
+        logger.info("First run — baseline established, no notifications sent.")
         return
 
-    if newest["id"] == last_id:
-        logger.info("No new listings.")
-        return
-
-    new_listings = []
     for listing in listings:
-        if listing["id"] == last_id:
-            break
-        new_listings.append(listing)
+        if listing["id"] not in states:
+            logger.info(f"{len(listing)} new listing(s) found.")
+            send_telegram(_format_message(listing))
+            states[listing["id"]] = {
+                "last_check": datetime.now().isoformat(),
+                "title": listing["title"],
+                "date": listing["date"],
+                "price": listing["price"],
+                "url": listing["url"],
+            }
 
-    if not new_listings:
-        new_listings = [newest]
-
-    logger.info(f"{len(new_listings)} new listing(s) found.")
-
-    for listing in new_listings:
-        send_telegram(_format_message(listing))
-
-    save_state({
-        "last_id":    newest["id"],
-        "last_date":  newest["date"],
-        "last_title": newest["title"],
-        "last_check": datetime.now().isoformat(),
-    })
+    save_state(states)
 
     logger.info("=== Check complete ===")
 

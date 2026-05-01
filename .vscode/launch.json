@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug HouseChecker App",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/watcher.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

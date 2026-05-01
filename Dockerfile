@@ -37,7 +37,10 @@ COPY chromedriver_manager.py .
 #   watcher.log       — CRITICAL-only log (written by the app)
 VOLUME ["/data"]
 
-# Set runtime environment to Docker mode and execute the watcher entrypoint
+# Set runtime environment to Docker mode
 ENV DOCKER=true
 
-ENTRYPOINT [".venv/bin/python", "watcher.py"]
+# Use CMD instead of ENTRYPOINT to preserve the base image's Selenium Grid startup
+# The base image (selenium/standalone-chrome) will start Selenium Grid first,
+# then run our watcher script after
+CMD [".venv/bin/python", "watcher.py"]

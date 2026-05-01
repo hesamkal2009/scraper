@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# setup.sh — builds the Docker image, sets up /root/mvgm-watcher, installs cron
+# setup.sh — builds the Docker image, sets up /root/HouseCheckerV2, installs cron
 # Run as root on Ubuntu 24.04
 set -euo pipefail
 
-DEPLOY_DIR="/root/mvgm-watcher"
+DEPLOY_DIR="/root/HouseCheckerV2"
 DATA_DIR="$DEPLOY_DIR/data"
 IMAGE_NAME="mvgm-watcher"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

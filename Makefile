@@ -20,7 +20,7 @@ deploy:
 # Quick deployment without pushing local git changes
 deploy-quick:
 	@echo "[make deploy-quick] Pulling latest code and restarting remote container..."
-	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'cd /root/mvgm-watcher && git pull origin main && docker build -t mvgm-watcher:latest . && docker restart mvgm-watcher'
+	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'cd /root/HouseCheckerV2 && git pull origin main && docker build -t mvgm-watcher:latest . && docker restart mvgm-watcher'
 	@echo "✓ Quick deployment complete!"
 
 # Tail the remote container logs for live debugging

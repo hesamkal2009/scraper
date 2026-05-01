@@ -18,8 +18,8 @@ RUN apt-get update -qq && \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory inside the container for application files
-WORKDIR /root/mvgm-watcher
-RUN echo "[Docker build] Working directory set to /root/mvgm-watcher"
+WORKDIR /root/HouseCheckerV2
+RUN echo "[Docker build] Working directory set to /root/HouseCheckerV2"
 
 # Install Python dependencies into a virtual environment
 COPY requirements.txt .

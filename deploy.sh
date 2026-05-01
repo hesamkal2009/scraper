@@ -10,7 +10,7 @@ set -e
 # Configuration
 SERVER_USER="root"
 SERVER_HOST="45.76.33.53"
-SERVER_PATH="/root/mvgm-watcher"
+SERVER_PATH="/root/HouseCheckerV2"
 CONTAINER_NAME="mvgm-watcher"
 GIT_BRANCH="main"
 IMAGE_NAME="mvgm-watcher:latest"
@@ -38,7 +38,7 @@ git push origin $GIT_BRANCH
 echo -e "${BLUE}[2/6] Pulling latest code on server...${NC}"
 ssh -i ~/.ssh/id_rsa $SERVER_USER@$SERVER_HOST << 'REMOTE_SCRIPT'
 set -e
-cd /root/mvgm-watcher
+cd /root/HouseCheckerV2
 echo "Current directory: $(pwd)"
 
 # Preserve .env file before pulling
@@ -64,7 +64,7 @@ REMOTE_SCRIPT
 echo -e "${BLUE}[3/6] Building Docker image on server...${NC}"
 ssh -i ~/.ssh/id_rsa $SERVER_USER@$SERVER_HOST << 'REMOTE_SCRIPT'
 set -e
-cd /root/mvgm-watcher
+cd /root/HouseCheckerV2
 docker build -t mvgm-watcher:latest .
 echo "✓ Image built successfully"
 REMOTE_SCRIPT
@@ -85,7 +85,7 @@ set -e
 docker run -d \
   --name mvgm-watcher \
   --restart unless-stopped \
-  -v /root/mvgm-watcher/data:/data \
+  -v /root/HouseCheckerV2/data:/data \
   -e DOCKER=true \
   -e TELEGRAM_BOT_TOKEN \
   -e TELEGRAM_CHAT_ID \

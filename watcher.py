@@ -1,3 +1,4 @@
+import html
 import os
 import sys
 import json
@@ -124,10 +125,43 @@ def _detect_chrome_binary() -> str:
 # ---------------------------------------------------------------------------
 # Telegram
 # ---------------------------------------------------------------------------
-def send_telegram(message: str) -> None:
+def _escape_text(text: str) -> str:
+    return html.escape(text, quote=True)
+
+
+def send_telegram(message: str, photo_url: str | None = None) -> None:
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         logger.critical("Telegram credentials not configured.")
         return
+
+    def _post_json(url: str, payload: dict) -> requests.Response:
+        resp = requests.post(url, json=payload, timeout=10)
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError:
+            logger.critical(
+                "Telegram API error: %s %s",
+                resp.status_code,
+                resp.text,
+            )
+            raise
+        return resp
+
+    if photo_url:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "photo": photo_url,
+            "caption": message,
+            "parse_mode": "HTML",
+        }
+        try:
+            _post_json(url, payload)
+            logger.info("Telegram photo notification sent.")
+            return
+        except Exception:
+            logger.info("Falling back to text-only Telegram notification.")
+
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -136,11 +170,10 @@ def send_telegram(message: str) -> None:
         "disable_web_page_preview": False,
     }
     try:
-        resp = requests.post(url, json=payload, timeout=10)
-        resp.raise_for_status()
-        logger.info("Telegram notification sent.")
+        _post_json(url, payload)
+        logger.info("Telegram text notification sent.")
     except Exception as e:
-        logger.critical(f"Failed to send Telegram message: {e}")
+        logger.critical(f"Failed to send Telegram notification: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -589,7 +622,7 @@ def run_check() -> None:
             logger.info(
                 f"New listing found: {listing['id']} | {listing.get('title', 'N/A')}"
             )
-            send_telegram(_format_message(listing))
+            send_telegram(_format_message(listing), photo_url=listing.get("image_url"))
             states[listing["id"]] = {
                 "last_check": datetime.now().isoformat(),
                 "title": listing["title"],
@@ -612,29 +645,39 @@ def run_check() -> None:
 
 
 def _format_message(listing: dict) -> str:
-    """Format listing data for Telegram notification"""
+    """Format listing data for Telegram notification."""
     lines = ["🏠 <b>New Rental Listing!</b>"]
 
-    if listing.get("title"):
-        lines.append(f"📍 <b>{listing['title']}</b>")
+    title = listing.get("title")
+    if title:
+        lines.append(f"📍 <b>{_escape_text(title)}</b>")
 
-    if listing.get("location"):
-        lines.append(f"📌 {listing['location']}")
+    status = listing.get("status")
+    if status:
+        if isinstance(status, list):
+            status = " | ".join([_escape_text(s) for s in status if s])
+        else:
+            status = _escape_text(str(status))
+        if status:
+            lines.append(f"🔖 {status}")
 
     if listing.get("price"):
-        lines.append(f"💶 <b>{listing['price']}</b>")
+        lines.append(f"💶 <b>{_escape_text(listing['price'])}</b>")
+
+    if listing.get("location"):
+        lines.append(f"📌 {_escape_text(listing['location'])}")
 
     if listing.get("size"):
-        lines.append(f"📐 {listing['size']}")
+        lines.append(f"📐 {_escape_text(listing['size'])}")
 
     if listing.get("bedrooms"):
-        lines.append(f"🛏️ {listing['bedrooms']}")
+        lines.append(f"🛏️ {_escape_text(listing['bedrooms'])}")
 
     if listing.get("available_from"):
-        lines.append(f"📅 {listing['available_from']}")
+        lines.append(f"📅 {_escape_text(listing['available_from'])}")
 
     if listing.get("url"):
-        lines.append(f"🔗 <a href=\"{listing['url']}\">View Listing</a>")
+        lines.append(f"🔗 <a href=\"{_escape_text(listing['url'])}\">View Listing</a>")
 
     return "\n".join(lines)
 

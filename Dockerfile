@@ -18,8 +18,8 @@ RUN apt-get update -qq && \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory inside the container for application files
-WORKDIR /root/HouseCheckerV2
-RUN echo "[Docker build] Working directory set to /root/HouseCheckerV2"
+WORKDIR /root/scraper
+RUN echo "[Docker build] Working directory set to /root/scraper"
 
 # Install Python dependencies into a virtual environment
 COPY requirements.txt .

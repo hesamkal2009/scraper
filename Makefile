@@ -2,7 +2,7 @@
 .PHONY: help deploy deploy-quick logs ssh
 
 help:
-	@echo "HouseCheckerV2 Deployment Commands:"
+	@echo "scraper Deployment Commands:"
 	@echo ""
 	@echo "  make deploy          - Full deployment (push, build, restart container)"
 	@echo "  make deploy-quick    - Quick deployment (no git push, just pull & rebuild)"
@@ -20,13 +20,13 @@ deploy:
 # Quick deployment without pushing local git changes
 deploy-quick:
 	@echo "[make deploy-quick] Pulling latest code and restarting remote container..."
-	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'cd /root/HouseCheckerV2 && git pull origin main && docker build -t housecheckerv2:latest . && docker restart housecheckerv2'
+	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'cd /root/scraper && git pull origin main && docker build -t scraper:latest . && docker restart scraper'
 	@echo "✓ Quick deployment complete!"
 
 # Tail the remote container logs for live debugging
 logs:
 	@echo "[make logs] Streaming remote container logs..."
-	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker logs -f housecheckerv2'
+	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker logs -f scraper'
 
 # Open an interactive SSH shell on the remote server
 ssh:
@@ -36,11 +36,11 @@ ssh:
 # Stop the running remote container if present
 stop:
 	@echo "[make stop] Stopping remote container..."
-	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker stop housecheckerv2'
+	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker stop scraper'
 	@echo "✓ Container stopped"
 
 # Restart the remote container using the existing image
 restart:
 	@echo "[make restart] Restarting remote container..."
-	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker restart housecheckerv2'
+	@ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker restart scraper'
 	@echo "✓ Container restarted"

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# setup.sh — builds the Docker image, sets up /root/HouseCheckerV2, installs cron
+# setup.sh — builds the Docker image, sets up /root/scraper, installs cron
 # Run as root on Ubuntu 24.04
 set -euo pipefail
 
-DEPLOY_DIR="/root/HouseCheckerV2"
+DEPLOY_DIR="/root/scraper"
 DATA_DIR="$DEPLOY_DIR/data"
-IMAGE_NAME="housecheckerv2"
+IMAGE_NAME="scraper"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "=== MVGM Housing Watcher Setup ==="
+echo "=== Scraper Watcher Setup ==="
 echo ""
 
 # ── 1. Docker ─────────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ echo "[3/4] Docker build completed successfully."
 echo "[4/4] Installing cron job (every 5 minutes)..."
 
 CRON_CMD="*/5 * * * * docker run --rm -v $DATA_DIR:/data $IMAGE_NAME >> $DATA_DIR/cron.log 2>&1"
-CRON_MARKER="# HouseCheckerV2"
+CRON_MARKER="# scraper"
 
 ( crontab -l 2>/dev/null | grep -v "$CRON_MARKER"; echo "$CRON_CMD $CRON_MARKER" ) | crontab -
 echo "    Cron installed."

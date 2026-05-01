@@ -1,5 +1,5 @@
 @echo off
-:: setup.bat — Housing Watcher setup for Windows 11 (local tuning)
+:: setup.bat — Scraper setup for Windows 11 (local tuning)
 setlocal EnableDelayedExpansion
 
 set "SCRIPT_DIR=%~dp0"
@@ -7,7 +7,7 @@ set "VENV_DIR=%SCRIPT_DIR%.venv"
 
 echo [Setup] Starting Windows setup...
 
-echo === Housing Watcher Windows Setup ===
+echo === Scraper Windows Setup ===
 echo.
 
 :: ── 1. Check Python 3.12 ─────────────────────────────────────────────────

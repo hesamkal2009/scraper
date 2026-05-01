@@ -103,7 +103,7 @@ make logs
 # Check Docker status
 make ssh
 docker ps -a
-docker logs HouseCheckerV2
+docker logs scraper
 ```
 
 ### Git Push Fails
@@ -125,5 +125,5 @@ To customize the deployment, edit `deploy.sh`:
 ## One-Liner Status Check
 
 ```bash
-ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker ps | grep HouseCheckerV2 && echo "✓ Running" || echo "✗ Not running"'
+ssh -i ~/.ssh/id_rsa root@45.76.33.53 'docker ps | grep scraper && echo "✓ Running" || echo "✗ Not running"'
 ```

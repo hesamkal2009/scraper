@@ -10,10 +10,10 @@ set -e
 # Configuration
 SERVER_USER="root"
 SERVER_HOST="45.76.33.53"
-SERVER_PATH="/root/HouseCheckerV2"
-CONTAINER_NAME="housecheckerv2"
+SERVER_PATH="/root/scraper"
+CONTAINER_NAME="scraper"
 GIT_BRANCH="main"
-IMAGE_NAME="housecheckerv2:latest"
+IMAGE_NAME="scraper:latest"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -21,7 +21,7 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}=== HouseCheckerV2 Deployment ===${NC}"
+echo -e "${BLUE}=== Scraper Deployment ===${NC}"
 echo "Server: $SERVER_USER@$SERVER_HOST"
 echo "Path: $SERVER_PATH"
 echo "Container: $CONTAINER_NAME"
@@ -38,7 +38,7 @@ git push origin $GIT_BRANCH
 echo -e "${BLUE}[2/6] Pulling latest code on server...${NC}"
 ssh -i ~/.ssh/id_rsa $SERVER_USER@$SERVER_HOST << 'REMOTE_SCRIPT'
 set -e
-cd /root/HouseCheckerV2
+cd /root/scraper
 echo "Current directory: $(pwd)"
 
 # Preserve .env file before pulling
@@ -64,8 +64,8 @@ REMOTE_SCRIPT
 echo -e "${BLUE}[3/6] Building Docker image on server...${NC}"
 ssh -i ~/.ssh/id_rsa $SERVER_USER@$SERVER_HOST << REMOTE_SCRIPT
 set -e
-cd /root/HouseCheckerV2
-docker build -t housecheckerv2:latest .
+cd /root/scraper
+docker build -t scraper:latest .
 echo "✓ Image built successfully"
 REMOTE_SCRIPT
 
@@ -73,8 +73,8 @@ REMOTE_SCRIPT
 echo -e "${BLUE}[4/6] Stopping old container...${NC}"
 ssh -i ~/.ssh/id_rsa $SERVER_USER@$SERVER_HOST << REMOTE_SCRIPT
 set -e
-docker stop housecheckerv2 2>/dev/null || echo "Container not running"
-docker rm housecheckerv2 2>/dev/null || echo "Container not found"
+docker stop scraper 2>/dev/null || echo "Container not running"
+docker rm scraper 2>/dev/null || echo "Container not found"
 echo "✓ Old container stopped/removed"
 REMOTE_SCRIPT
 
@@ -83,14 +83,14 @@ echo -e "${BLUE}[5/6] Starting new container...${NC}"
 ssh -i ~/.ssh/id_rsa $SERVER_USER@$SERVER_HOST << REMOTE_SCRIPT
 set -e
 docker run -d \
-  --name housecheckerv2 \
+  --name scraper \
   --restart unless-stopped \
-  -v /root/HouseCheckerV2/data:/data \
+  -v /root/scraper/data:/data \
   -e DOCKER=true \
   -e TELEGRAM_BOT_TOKEN \
   -e TELEGRAM_CHAT_ID \
   -e TARGET_URL \
-  housecheckerv2:latest
+  scraper:latest
 echo "✓ Container started"
 REMOTE_SCRIPT
 
@@ -98,8 +98,8 @@ REMOTE_SCRIPT
 echo -e "${BLUE}[6/6] Verifying deployment...${NC}"
 ssh -i ~/.ssh/id_rsa $SERVER_USER@$SERVER_HOST << REMOTE_SCRIPT
 set -e
-docker ps | grep housecheckerv2 || (echo "Container not running!" && exit 1)
-docker logs housecheckerv2 --tail 5
+docker ps | grep scraper || (echo "Container not running!" && exit 1)
+docker logs scraper --tail 5
 echo "✓ Container is running"
 REMOTE_SCRIPT
 

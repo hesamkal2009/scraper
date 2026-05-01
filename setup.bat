@@ -5,6 +5,8 @@ setlocal EnableDelayedExpansion
 set "SCRIPT_DIR=%~dp0"
 set "VENV_DIR=%SCRIPT_DIR%.venv"
 
+echo [Setup] Starting Windows setup...
+
 echo === Housing Watcher Windows Setup ===
 echo.
 
@@ -58,6 +60,7 @@ echo       run.bat
 echo.
 
 :: Create a convenience run.bat
+echo [Setup] Creating run.bat entrypoint...
 echo @echo off > "%SCRIPT_DIR%run.bat"
 echo "%VENV_DIR%\Scripts\python.exe" "%SCRIPT_DIR%watcher.py" >> "%SCRIPT_DIR%run.bat"
 echo pause >> "%SCRIPT_DIR%run.bat"

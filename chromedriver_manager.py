@@ -11,10 +11,10 @@ import requests
 logger = logging.getLogger(__name__)
 
 IS_WINDOWS = platform.system() == "Windows"
-IS_DOCKER  = os.getenv("DOCKER", "false").strip().lower() == "true"
+IS_DOCKER = os.getenv("DOCKER", "false").strip().lower() == "true"
 
 MIN_CHROMEDRIVER_VERSION = 115
-CHROMEDRIVER_LATEST_URL  = (
+CHROMEDRIVER_LATEST_URL = (
     "https://googlechromelabs.github.io/chrome-for-testing/"
     "last-known-good-versions-with-downloads.json"
 )
@@ -26,6 +26,9 @@ def ensure_chromedriver(chromedriver_path: str) -> bool:
     Local:   Check version; download latest stable if missing or version <= 115.
     Returns True if ready to use, False on failure.
     """
+    logger.info("Ensuring ChromeDriver is ready for Selenium.")
+    logger.info(f"Checking ChromeDriver path: {chromedriver_path}")
+    # Ensure the local or Docker ChromeDriver installation is valid before running Selenium
     if IS_DOCKER:
         logger.info(f"Docker mode — using bundled ChromeDriver at {chromedriver_path}.")
         return True
@@ -52,13 +55,14 @@ def ensure_chromedriver(chromedriver_path: str) -> bool:
 # Internals
 # ---------------------------------------------------------------------------
 
+
 def _get_installed_version(chromedriver_path: str) -> int | None:
+    # Return installed ChromeDriver major version, or None if it is missing
     if not os.path.isfile(chromedriver_path):
         return None
     try:
         result = subprocess.run(
-            [chromedriver_path, "--version"],
-            capture_output=True, text=True, timeout=5
+            [chromedriver_path, "--version"], capture_output=True, text=True, timeout=5
         )
         match = re.search(r"ChromeDriver (\d+)\.", result.stdout)
         if match:
@@ -81,9 +85,10 @@ def _leftover_folder(platform_key: str) -> str:
 
 
 def _download_latest(destination_path: str) -> bool:
-    platform_key   = _platform_key()
-    entry_suffix   = _zip_entry_suffix(platform_key)
-    leftover       = _leftover_folder(platform_key)
+    # Download and install the latest ChromeDriver for the current platform
+    platform_key = _platform_key()
+    entry_suffix = _zip_entry_suffix(platform_key)
+    leftover = _leftover_folder(platform_key)
 
     try:
         logger.info("Fetching latest stable ChromeDriver info...")
@@ -91,8 +96,8 @@ def _download_latest(destination_path: str) -> bool:
         resp.raise_for_status()
         data = resp.json()
 
-        stable    = data["channels"]["Stable"]
-        version   = stable["version"]
+        stable = data["channels"]["Stable"]
+        version = stable["version"]
         downloads = stable["downloads"].get("chromedriver", [])
 
         download_url = next(
@@ -128,7 +133,10 @@ def _download_latest(destination_path: str) -> bool:
 
         if not IS_WINDOWS:
             st = os.stat(destination_path)
-            os.chmod(destination_path, st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+            os.chmod(
+                destination_path,
+                st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH,
+            )
 
         logger.info(f"ChromeDriver {version} installed at {destination_path}")
         return True

@@ -62,7 +62,7 @@ CHROMEDRIVER_PATH = os.getenv(
 # ---------------------------------------------------------------------------
 os.makedirs(os.path.dirname(LOG_FILE) or ".", exist_ok=True)
 
-_file_handler = logging.FileHandler(LOG_FILE)
+_file_handler = logging.FileHandler(LOG_FILE, mode="w")
 _file_handler.setLevel(logging.CRITICAL)
 
 _stdout_handler = logging.StreamHandler(sys.stdout)
@@ -147,6 +147,7 @@ def send_telegram(message: str) -> None:
 # State persistence
 # ---------------------------------------------------------------------------
 def load_state() -> dict:
+    logger.info(f"Loading existing state from {STATE_FILE}")
     if not os.path.isfile(STATE_FILE):
         return {}
     try:
@@ -158,6 +159,7 @@ def load_state() -> dict:
 
 def save_state(states: dict) -> None:
     os.makedirs(os.path.dirname(STATE_FILE) or ".", exist_ok=True)
+    logger.info(f"Saving top 10 listings to state file {STATE_FILE}")
 
     # 1. Sort and slice the items first
     # 2. Convert back to a dict
@@ -167,8 +169,12 @@ def save_state(states: dict) -> None:
     )
     top_10_state = dict(sorted_items[:10])
 
-    with open(STATE_FILE, "w") as f:
-        json.dump(top_10_state, f, indent=2)
+    try:
+        with open(STATE_FILE, "w") as f:
+            json.dump(top_10_state, f, indent=2)
+        logger.info(f"State saved: {len(top_10_state)} listings in memory.")
+    except Exception as e:
+        logger.critical(f"Failed to save state file: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +186,7 @@ SELENIUM_GRID_URL = "http://localhost:4444/wd/hub"
 def _wait_for_grid(timeout: int = 30) -> None:
     """Block until the Selenium Grid inside the container is accepting sessions."""
     import urllib.request
+
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
@@ -233,7 +240,7 @@ def build_driver():
         chrome_binary = CHROME_BINARY or _detect_chrome_binary()
         logger.info(f"Local — Chrome: {chrome_binary} | headless={HEADLESS}")
         service = Service(executable_path=CHROMEDRIVER_PATH)
-        driver  = webdriver.Chrome(service=service, options=options)
+        driver = webdriver.Chrome(service=service, options=options)
 
     driver.set_page_load_timeout(PAGE_LOAD_TIMEOUT)
     return driver
@@ -290,8 +297,14 @@ def scrape_listings(driver: webdriver.Chrome) -> list[dict]:
         "div[class*='woning'], div[class*='listing']"
     )
 
+    _press_tabs(driver, 5)  # Move to language selector
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    _press_arrows_enter_tab(driver, 2, final_tab=False)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+
+    time.sleep(3)  # Wait for language change to take effect
+
     # Search for location (twice)
-    _search_location(driver)
     _search_location(driver)
     wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, CARD_SELECTOR)))
 
@@ -362,9 +375,23 @@ def scrape_listings(driver: webdriver.Chrome) -> list[dict]:
 
 def _parse_card(card) -> dict | None:
     """
-    Extracts fields from a single listing card element.
-    Adjust selectors here once the real DOM is confirmed via Windows debug run.
+    Extracts all fields from a single listing card element.
+    Filters by rental status (only "For rent" / "Te huur").
     """
+    status = ""
+    for sel in [".badge", "[class*='status']", "span.badge"]:
+        try:
+            el = card.find_element(By.CSS_SELECTOR, sel)
+            status = el.text.strip()
+            if status:
+                break
+        except Exception:
+            pass
+
+    # Only process if it's a rental listing
+    if not any(term in status.lower() for term in ["for rent", "te huur"]):
+        return None
+
     listing_id = (
         card.get_attribute("data-id")
         or card.get_attribute("data-object-id")
@@ -372,14 +399,7 @@ def _parse_card(card) -> dict | None:
     )
 
     title = ""
-    for sel in [
-        "h2",
-        "h3",
-        ".title",
-        ".property-title",
-        ".woning-title",
-        "[class*='title']",
-    ]:
+    for sel in ["h5.card-title a", ".card-title a", "h2", "h3"]:
         try:
             el = card.find_element(By.CSS_SELECTOR, sel)
             title = el.text.strip()
@@ -388,28 +408,8 @@ def _parse_card(card) -> dict | None:
         except Exception:
             pass
 
-    price = ""
-    for sel in [".price", "[class*='price']", ".huurprijs", "span[class*='rent']"]:
-        try:
-            el = card.find_element(By.CSS_SELECTOR, sel)
-            price = el.text.strip()
-            if price:
-                break
-        except Exception:
-            pass
-
-    date_str = ""
-    for sel in ["time", "[datetime]", "[class*='date']", "[class*='datum']"]:
-        try:
-            el = card.find_element(By.CSS_SELECTOR, sel)
-            date_str = el.get_attribute("datetime") or el.text.strip()
-            if date_str:
-                break
-        except Exception:
-            pass
-
     url = ""
-    for sel in ["a", "a.property-link", "a[href*='woning']", "a[href*='huur']"]:
+    for sel in ["a.stretched-link", ".card-title a", "a[href*='object']"]:
         try:
             el = card.find_element(By.CSS_SELECTOR, sel)
             url = el.get_attribute("href") or ""
@@ -421,15 +421,102 @@ def _parse_card(card) -> dict | None:
     if not listing_id and url:
         listing_id = url.rstrip("/").split("/")[-1]
 
+    # Extract price
+    price = ""
+    for sel in [".fw-bold", "[class*='price']", "span.fw-bold"]:
+        try:
+            el = card.find_element(By.CSS_SELECTOR, sel)
+            text = el.text.strip()
+            if "€" in text or "month" in text.lower():
+                price = text
+                break
+        except Exception:
+            pass
+
+    # Extract location/address
+    location = ""
+    try:
+        # Find span with location info (usually 2nd or 3rd span in card-body)
+        spans = card.find_elements(By.CSS_SELECTOR, ".card-body span")
+        if len(spans) > 1:
+            location = spans[1].text.strip()
+    except Exception:
+        pass
+
+    # Extract available from date
+    available_from = ""
+    try:
+        date_span = card.find_element(By.CSS_SELECTOR, ".d-flex.gap-1")
+        date_text = date_span.text.strip()
+        if "available" in date_text.lower():
+            available_from = date_text
+        else:
+            available_from = date_text
+    except Exception:
+        pass
+
+    # Extract size (m²)
+    size = ""
+    try:
+        size_el = card.find_element(By.CSS_SELECTOR, "sup")
+        parent = size_el.find_element(By.XPATH, "..")
+        size_text = parent.text.strip()
+        size = size_text
+    except Exception:
+        pass
+
+    # Extract bedrooms
+    bedrooms = ""
+    try:
+        spans = card.find_elements(By.CSS_SELECTOR, ".card-body span")
+        for span in spans:
+            text = span.text.strip()
+            if "bedroom" in text.lower():
+                bedrooms = text
+                break
+    except Exception:
+        pass
+
+    # Extract image
+    image_url = ""
+    try:
+        img = card.find_element(By.CSS_SELECTOR, "img")
+        image_url = img.get_attribute("src") or img.get_attribute("srcset")
+    except Exception:
+        pass
+
+    # Extract registration info
+    registration = ""
+    try:
+        reg_span = card.find_element(
+            By.CSS_SELECTOR, ".d-flex.gap-1 span:contains('Register')"
+        )
+        registration = reg_span.text.strip()
+    except Exception:
+        try:
+            spans = card.find_elements(By.CSS_SELECTOR, ".card-body span")
+            for span in spans:
+                if "register" in span.text.lower():
+                    registration = span.text.strip()
+                    break
+        except Exception:
+            pass
+
     if not title and not listing_id:
         return None
 
     return {
         "id": listing_id or title,
         "title": title,
-        "price": price,
-        "date": date_str,
         "url": url,
+        "status": status,
+        "price": price,
+        "location": location,
+        "available_from": available_from,
+        "size": size,
+        "bedrooms": bedrooms,
+        "image_url": image_url,
+        "registration_info": registration,
     }
 
 
@@ -444,63 +531,106 @@ def run_check() -> None:
         return
 
     listings = []
-    for _ in range(3):
+    driver = None
+    for attempt in range(1, 4):
+        logger.info(f"[Attempt {attempt}/3] Starting browser session")
         try:
             driver = build_driver()
             listings = scrape_listings(driver)
+            logger.info(
+                f"[Attempt {attempt}/3] Scrape completed: {len(listings)} listings loaded."
+            )
             break
         except Exception as e:
-            logger.critical(f"WebDriver error: {e}")
-            time.sleep(5)
+            logger.critical(f"WebDriver error on attempt {attempt}: {e}")
+            if attempt < 3:
+                logger.info("Retrying after failure...")
+                time.sleep(5)
         finally:
-            if driver:
+            if driver is not None:
                 driver.quit()
+                logger.info(f"[Attempt {attempt}/3] Browser session closed.")
+                driver = None
 
     if not listings:
         logger.critical("No listings found — selectors likely need updating.")
         return
 
     states = load_state()
+    logger.info(f"Existing state entries: {len(states)}")
     if not states:
         for listing in listings:
             states[listing["id"]] = {
                 "last_check": datetime.now().isoformat(),
                 "title": listing["title"],
-                "date": listing["date"],
-                "price": listing["price"],
                 "url": listing["url"],
+                "status": listing["status"],
+                "price": listing["price"],
+                "location": listing["location"],
+                "available_from": listing["available_from"],
+                "size": listing["size"],
+                "bedrooms": listing["bedrooms"],
+                "image_url": listing["image_url"],
+                "registration_info": listing["registration_info"],
             }
         save_state(states)
         logger.info("First run — baseline established, no notifications sent.")
         return
 
+    new_count = 0
     for listing in listings:
         if listing["id"] not in states:
-            logger.info(f"{len(listing)} new listing(s) found.")
+            new_count += 1
+            logger.info(
+                f"New listing found: {listing['id']} | {listing.get('title', 'N/A')}"
+            )
             send_telegram(_format_message(listing))
             states[listing["id"]] = {
                 "last_check": datetime.now().isoformat(),
                 "title": listing["title"],
-                "date": listing["date"],
-                "price": listing["price"],
                 "url": listing["url"],
+                "status": listing["status"],
+                "price": listing["price"],
+                "location": listing["location"],
+                "available_from": listing["available_from"],
+                "size": listing["size"],
+                "bedrooms": listing["bedrooms"],
+                "image_url": listing["image_url"],
+                "registration_info": listing["registration_info"],
             }
 
+    if new_count > 0:
+        logger.info(f"Total new listings: {new_count}")
     save_state(states)
 
     logger.info("=== Check complete ===")
 
 
 def _format_message(listing: dict) -> str:
+    """Format listing data for Telegram notification"""
     lines = ["🏠 <b>New Rental Listing!</b>"]
+
     if listing.get("title"):
         lines.append(f"📍 <b>{listing['title']}</b>")
+
+    if listing.get("location"):
+        lines.append(f"📌 {listing['location']}")
+
     if listing.get("price"):
-        lines.append(f"💶 {listing['price']}")
-    if listing.get("date"):
-        lines.append(f"📅 {listing['date']}")
+        lines.append(f"💶 <b>{listing['price']}</b>")
+
+    if listing.get("size"):
+        lines.append(f"📐 {listing['size']}")
+
+    if listing.get("bedrooms"):
+        lines.append(f"🛏️ {listing['bedrooms']}")
+
+    if listing.get("available_from"):
+        lines.append(f"📅 {listing['available_from']}")
+
     if listing.get("url"):
-        lines.append(f"🔗 <a href=\"{listing['url']}\">{listing['url']}</a>")
+        lines.append(f"🔗 <a href=\"{listing['url']}\">View Listing</a>")
+
     return "\n".join(lines)
 
 

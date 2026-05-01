@@ -34,6 +34,7 @@ fi
 echo "[2/4] Creating deploy directories..."
 mkdir -p "$DATA_DIR"
 
+echo "[2/4] Copying project files to deploy directory..."
 # Copy project files
 cp "$SCRIPT_DIR/watcher.py"             "$DEPLOY_DIR/"
 cp "$SCRIPT_DIR/chromedriver_manager.py" "$DEPLOY_DIR/"
@@ -53,6 +54,7 @@ fi
 echo "[3/4] Building Docker image '$IMAGE_NAME' (this may take a few minutes)..."
 docker build --pull -t "$IMAGE_NAME" "$DEPLOY_DIR"
 echo "    Image built."
+echo "[3/4] Docker build completed successfully."
 
 # ── 4. Cron job ───────────────────────────────────────────────────────────
 echo "[4/4] Installing cron job (every 5 minutes)..."

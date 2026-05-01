@@ -11,9 +11,9 @@ set -e
 SERVER_USER="root"
 SERVER_HOST="45.76.33.53"
 SERVER_PATH="/root/HouseCheckerV2"
-CONTAINER_NAME="HouseCheckerV2"
+CONTAINER_NAME="housecheckerv2"
 GIT_BRANCH="main"
-IMAGE_NAME="HouseCheckerV2:latest"
+IMAGE_NAME="housecheckerv2:latest"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -65,7 +65,7 @@ echo -e "${BLUE}[3/6] Building Docker image on server...${NC}"
 ssh -i ~/.ssh/id_rsa $SERVER_USER@$SERVER_HOST << 'REMOTE_SCRIPT'
 set -e
 cd /root/HouseCheckerV2
-docker build -t HouseCheckerV2:latest .
+docker build -t $IMAGE_NAME .
 echo "✓ Image built successfully"
 REMOTE_SCRIPT
 
@@ -73,8 +73,8 @@ REMOTE_SCRIPT
 echo -e "${BLUE}[4/6] Stopping old container...${NC}"
 ssh -i ~/.ssh/id_rsa $SERVER_USER@$SERVER_HOST << 'REMOTE_SCRIPT'
 set -e
-docker stop HouseCheckerV2 2>/dev/null || echo "Container not running"
-docker rm HouseCheckerV2 2>/dev/null || echo "Container not found"
+docker stop $CONTAINER_NAME 2>/dev/null || echo "Container not running"
+docker rm $CONTAINER_NAME 2>/dev/null || echo "Container not found"
 echo "✓ Old container stopped/removed"
 REMOTE_SCRIPT
 
@@ -83,14 +83,14 @@ echo -e "${BLUE}[5/6] Starting new container...${NC}"
 ssh -i ~/.ssh/id_rsa $SERVER_USER@$SERVER_HOST << 'REMOTE_SCRIPT'
 set -e
 docker run -d \
-  --name HouseCheckerV2 \
+  --name $CONTAINER_NAME \
   --restart unless-stopped \
   -v /root/HouseCheckerV2/data:/data \
   -e DOCKER=true \
   -e TELEGRAM_BOT_TOKEN \
   -e TELEGRAM_CHAT_ID \
   -e TARGET_URL \
-  HouseCheckerV2:latest
+  $IMAGE_NAME
 echo "✓ Container started"
 REMOTE_SCRIPT
 
@@ -98,8 +98,8 @@ REMOTE_SCRIPT
 echo -e "${BLUE}[6/6] Verifying deployment...${NC}"
 ssh -i ~/.ssh/id_rsa $SERVER_USER@$SERVER_HOST << 'REMOTE_SCRIPT'
 set -e
-docker ps | grep HouseCheckerV2 || (echo "Container not running!" && exit 1)
-docker logs HouseCheckerV2 --tail 5
+docker ps | grep $CONTAINER_NAME || (echo "Container not running!" && exit 1)
+docker logs $CONTAINER_NAME --tail 5
 echo "✓ Container is running"
 REMOTE_SCRIPT
 

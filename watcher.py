@@ -161,12 +161,10 @@ def save_state(states: dict) -> None:
     os.makedirs(os.path.dirname(STATE_FILE) or ".", exist_ok=True)
     logger.info(f"Saving top 10 listings to state file {STATE_FILE}")
 
-    # 1. Sort and slice the items first
-    # 2. Convert back to a dict
-    # 3. Assign it to a variable (or overwrite 'state')
     sorted_items = sorted(
-        states.items(), key=lambda item: item[1]["date"], reverse=True
+        states.items(), key=lambda item: item[1].get("last_check", ""), reverse=True
     )
+
     top_10_state = dict(sorted_items[:10])
 
     try:
@@ -255,15 +253,12 @@ def _press_tabs(driver: webdriver.Chrome, count: int) -> None:
         driver.switch_to.active_element.send_keys(Keys.TAB)
 
 
-def _press_arrows_enter_tab(
-    driver: webdriver.Chrome, count: int, final_tab: bool = True
-) -> None:
+def _press_arrows_enter_tab(driver: webdriver.Chrome, count: int) -> None:
     """Send ARROW_DOWN count times, then ENTER, optionally TAB"""
     for _ in range(count):
         driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
     driver.switch_to.active_element.send_keys(Keys.ENTER)
-    if final_tab:
-        driver.switch_to.active_element.send_keys(Keys.TAB)
+    driver.switch_to.active_element.send_keys(Keys.TAB)
 
 
 def _search_location(driver: webdriver.Chrome) -> None:
@@ -299,7 +294,7 @@ def scrape_listings(driver: webdriver.Chrome) -> list[dict]:
 
     _press_tabs(driver, 5)  # Move to language selector
     driver.switch_to.active_element.send_keys(Keys.ENTER)
-    _press_arrows_enter_tab(driver, 2, final_tab=False)
+    _press_arrows_enter_tab(driver, 2)
     driver.switch_to.active_element.send_keys(Keys.ENTER)
 
     time.sleep(3)  # Wait for language change to take effect
@@ -312,21 +307,25 @@ def scrape_listings(driver: webdriver.Chrome) -> list[dict]:
     _press_tabs(driver, 17)
     driver.switch_to.active_element.send_keys(Keys.ENTER)
 
-    # Select filters
-    _press_arrows_enter_tab(driver, 7)  # From Price
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    _press_arrows_enter_tab(driver, 10)  # To Price
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    _press_arrows_enter_tab(driver, 2)  # From Living Space
+    # From Price
+    _press_arrows_enter_tab(driver, 7)
+    _press_arrows_enter_tab(driver, 10)
+
+    # To move to PropertyType
     _press_tabs(driver, 1)
+
+    # Property Type
     driver.switch_to.active_element.send_keys(Keys.ENTER)
-    _press_arrows_enter_tab(driver, 2, final_tab=False)  # Property Type
+    _press_arrows_enter_tab(driver, 2)
+
     _press_tabs(driver, 1)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    _press_arrows_enter_tab(driver, 2, final_tab=False)  # Apartment Type
+    _press_arrows_enter_tab(driver, 2)  # Apartment Type
+
+    # Move to Bedrooms
     _press_tabs(driver, 1)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    _press_arrows_enter_tab(driver, 2, final_tab=False)  # Bedrooms
+
+    _press_arrows_enter_tab(driver, 2)  # Bedrooms
+    time.sleep(2)
 
     # Apply filters and wait
     _press_tabs(driver, 4)
@@ -334,9 +333,9 @@ def scrape_listings(driver: webdriver.Chrome) -> list[dict]:
     time.sleep(4)
 
     # Set sort to newest
-    _press_tabs(driver, 25)
+    _press_tabs(driver, 26)
     time.sleep(3)
-    _press_tabs(driver, 2)
+    _press_tabs(driver, 1)
     time.sleep(3)
 
     if "/aanbod/?page=" in driver.switch_to.active_element.get_attribute("href"):
@@ -344,7 +343,13 @@ def scrape_listings(driver: webdriver.Chrome) -> list[dict]:
             "Unexpected pagination link focused — selectors likely need updating."
         )
 
-    driver.switch_to.active_element.send_keys(Keys.ENTER, Keys.ARROW_DOWN, Keys.ENTER)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    time.sleep(1)
+    driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
+    time.sleep(1)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    time.sleep(3)
+
     wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, CARD_SELECTOR)))
 
     try:
@@ -377,19 +382,19 @@ def _parse_card(card) -> dict | None:
     """
     Extracts all fields from a single listing card element.
     Filters by rental status (only "For rent" / "Te huur").
+    The catch is that some cards have multiple bades next to
+    for rent or Te huur, so we need to look for the badge that contains the status
     """
-    status = ""
+    status = []
     for sel in [".badge", "[class*='status']", "span.badge"]:
         try:
             el = card.find_element(By.CSS_SELECTOR, sel)
-            status = el.text.strip()
-            if status:
-                break
+            status.append(el.text.strip())
         except Exception:
             pass
 
     # Only process if it's a rental listing
-    if not any(term in status.lower() for term in ["for rent", "te huur"]):
+    if not any(term in s.lower() for s in status for term in ["for rent", "te huur"]):
         return None
 
     listing_id = (

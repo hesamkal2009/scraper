@@ -156,17 +156,19 @@ def load_state() -> dict:
         return {}
 
 
-def save_state(state: dict) -> None:
+def save_state(states: dict) -> None:
     os.makedirs(os.path.dirname(STATE_FILE) or ".", exist_ok=True)
 
     # 1. Sort and slice the items first
     # 2. Convert back to a dict
     # 3. Assign it to a variable (or overwrite 'state')
-    sorted_items = sorted(state.items(), key=lambda item: item[1]["date"], reverse=True)
-    top_100_state = dict(sorted_items[:10])
+    sorted_items = sorted(
+        states.items(), key=lambda item: item[1]["date"], reverse=True
+    )
+    top_10_state = dict(sorted_items[:10])
 
     with open(STATE_FILE, "w") as f:
-        json.dump(top_100_state, f, indent=2)
+        json.dump(top_10_state, f, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +209,37 @@ def build_driver() -> webdriver.Chrome:
 
 
 # ---------------------------------------------------------------------------
+# Scraper — helper functions
+# ---------------------------------------------------------------------------
+def _press_tabs(driver: webdriver.Chrome, count: int) -> None:
+    """Send TAB key count times"""
+    for _ in range(count):
+        driver.switch_to.active_element.send_keys(Keys.TAB)
+
+
+def _press_arrows_enter_tab(
+    driver: webdriver.Chrome, count: int, final_tab: bool = True
+) -> None:
+    """Send ARROW_DOWN count times, then ENTER, optionally TAB"""
+    for _ in range(count):
+        driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    if final_tab:
+        driver.switch_to.active_element.send_keys(Keys.TAB)
+
+
+def _search_location(driver: webdriver.Chrome) -> None:
+    """Navigate to location field and enter Utrecht search"""
+    _press_tabs(driver, 11)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    driver.switch_to.active_element.send_keys("Utrecht, Utrecht, Utrecht")
+    time.sleep(3)
+    driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN, Keys.ENTER)
+    _press_tabs(driver, 2)
+    driver.switch_to.active_element.click()
+
+
+# ---------------------------------------------------------------------------
 # Scraper
 # ---------------------------------------------------------------------------
 def scrape_listings(driver: webdriver.Chrome) -> list[dict]:
@@ -221,122 +254,53 @@ def scrape_listings(driver: webdriver.Chrome) -> list[dict]:
     driver.get(TARGET_URL)
 
     wait = WebDriverWait(driver, ELEMENT_WAIT_TIMEOUT)
-
     CARD_SELECTOR = (
         "div.property-item, div.listing-item, article.property, "
         "div[class*='woning'], div[class*='listing']"
     )
 
-    for _ in range(11):
-        driver.switch_to.active_element.send_keys(Keys.TAB)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    driver.switch_to.active_element.send_keys("Utrecht, Utrecht, Utrecht")
-    time.sleep(3)
-    driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    driver.switch_to.active_element.send_keys(Keys.TAB)
-    driver.switch_to.active_element.send_keys(Keys.TAB)
-    driver.switch_to.active_element.click()
-
-    # repeat task from for again when page loads eagain
-    for _ in range(11):
-        driver.switch_to.active_element.send_keys(Keys.TAB)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    driver.switch_to.active_element.send_keys("Utrecht, Utrecht, Utrecht")
-    time.sleep(3)
-    driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    driver.switch_to.active_element.send_keys(Keys.TAB)
-    driver.switch_to.active_element.send_keys(Keys.TAB)
-    driver.switch_to.active_element.click()
-
+    # Search for location (twice)
+    _search_location(driver)
+    _search_location(driver)
     wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, CARD_SELECTOR)))
 
-    # Go to filter section
-    for _ in range(17):
-        driver.switch_to.active_element.send_keys(Keys.TAB)
+    # Navigate to filter section
+    _press_tabs(driver, 17)
     driver.switch_to.active_element.send_keys(Keys.ENTER)
 
-    # Select From Price
-    for _ in range(7):
-        driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
+    # Select filters
+    _press_arrows_enter_tab(driver, 7)  # From Price
     driver.switch_to.active_element.send_keys(Keys.ENTER)
-    driver.switch_to.active_element.send_keys(Keys.TAB)
-    # End Select From Price
+    _press_arrows_enter_tab(driver, 10)  # To Price
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    _press_arrows_enter_tab(driver, 2)  # From Living Space
+    _press_tabs(driver, 1)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    _press_arrows_enter_tab(driver, 2, final_tab=False)  # Property Type
+    _press_tabs(driver, 1)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    _press_arrows_enter_tab(driver, 2, final_tab=False)  # Apartment Type
+    _press_tabs(driver, 1)
+    driver.switch_to.active_element.send_keys(Keys.ENTER)
+    _press_arrows_enter_tab(driver, 2, final_tab=False)  # Bedrooms
 
-    # Select To Price
+    # Apply filters and wait
+    _press_tabs(driver, 4)
     driver.switch_to.active_element.send_keys(Keys.ENTER)
-    for _ in range(10):
-        driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    driver.switch_to.active_element.send_keys(Keys.TAB)
-    # End Select To Price
+    time.sleep(4)
 
-    # Select From Living Space
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    for _ in range(2):
-        driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    driver.switch_to.active_element.send_keys(Keys.TAB)
-    # End Select From Living Space
+    # Set sort to newest
+    _press_tabs(driver, 25)
+    time.sleep(3)
+    _press_tabs(driver, 2)
+    time.sleep(3)
 
-    # Select To Property Type
-    driver.switch_to.active_element.send_keys(Keys.TAB)
-
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    for _ in range(2):
-        driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    # End Select To Property Type
-
-    # Select Apartment Type
-    driver.switch_to.active_element.send_keys(Keys.TAB)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-
-    for _ in range(2):
-        driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    # End Select Apartment Type
-
-    # Select Bedrooms
-    driver.switch_to.active_element.send_keys(Keys.TAB)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    for _ in range(2):
-        driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    # End Select Bedrooms
-
-    # Apply filters
-    for _ in range(4):
-        driver.switch_to.active_element.send_keys(Keys.TAB)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    # Apply filters
-
-    time.sleep(4)  # wait for filters to apply and page to reload
-
-    # Set Sort to Newest
-    for _ in range(25):
-        driver.switch_to.active_element.send_keys(Keys.TAB)
-    time.sleep(3)  # wait for filters to apply and page to reload
-    for _ in range(2):
-        driver.switch_to.active_element.send_keys(Keys.TAB)
-    time.sleep(3)  # wait for filters to apply and page to reload
-
-    if driver.switch_to.active_element.get_attribute("href").startswith(
-        "/aanbod/?page="
-    ):
-        # get the number after page=
-        current_page = int(
-            driver.switch_to.active_element.get_attribute("href").split("page=")[-1]
-        )
-        driver.switch_to.active_element.send_keys(
-            Keys.TAB, backwards=True, repeat=current_page
+    if "/aanbod/?page=" in driver.switch_to.active_element.get_attribute("href"):
+        raise Exception(
+            "Unexpected pagination link focused — selectors likely need updating."
         )
 
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-    driver.switch_to.active_element.send_keys(Keys.ARROW_DOWN)
-    driver.switch_to.active_element.send_keys(Keys.ENTER)
-
+    driver.switch_to.active_element.send_keys(Keys.ENTER, Keys.ARROW_DOWN, Keys.ENTER)
     wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, CARD_SELECTOR)))
 
     try:
@@ -448,16 +412,18 @@ def run_check() -> None:
         logger.critical("ChromeDriver setup failed. Aborting.")
         return
 
-    driver = None
-    try:
-        driver = build_driver()
-        listings = scrape_listings(driver)
-    except WebDriverException as e:
-        logger.critical(f"WebDriver error: {e}")
-        return
-    finally:
-        if driver:
-            driver.quit()
+    listings = []
+    for _ in range(3):
+        try:
+            driver = build_driver()
+            listings = scrape_listings(driver)
+            break
+        except Exception as e:
+            logger.critical(f"WebDriver error: {e}")
+            time.sleep(5)
+        finally:
+            if driver:
+                driver.quit()
 
     if not listings:
         logger.critical("No listings found — selectors likely need updating.")

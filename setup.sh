@@ -57,12 +57,16 @@ echo "    Image built."
 echo "[3/4] Docker build completed successfully."
 
 # ── 4. Cron job ───────────────────────────────────────────────────────────
-echo "[4/4] Installing cron job (every 5 minutes)..."
+echo "[4/4] Installing cron jobs (every 5 minutes 8 AM-6 PM weekdays, every hour after 6 PM weekdays)..."
 
-CRON_CMD="*/5 * * * * docker run --rm -v $DATA_DIR:/data $IMAGE_NAME >> $DATA_DIR/cron.log 2>&1"
+# Clean up any existing scraper cron jobs
+crontab -l 2>/dev/null | grep -v "# scraper" | crontab -
+
+CRON_CMD1="*/5 8-18 * * 1-5 docker run --rm -v $DATA_DIR:/data $IMAGE_NAME >> $DATA_DIR/cron.log 2>&1"
+CRON_CMD2="0 18-23 * * 1-5 docker run --rm -v $DATA_DIR:/data $IMAGE_NAME >> $DATA_DIR/cron.log 2>&1"
 CRON_MARKER="# scraper"
 
-( crontab -l 2>/dev/null | grep -v "$CRON_MARKER"; echo "$CRON_CMD $CRON_MARKER" ) | crontab -
+( crontab -l 2>/dev/null; echo "$CRON_CMD1 $CRON_MARKER"; echo "$CRON_CMD2 $CRON_MARKER" ) | crontab -
 echo "    Cron installed."
 
 echo ""
@@ -71,7 +75,7 @@ echo ""
 echo "  Deploy dir  : $DEPLOY_DIR"
 echo "  Data dir    : $DATA_DIR  (mounted as /data inside the container)"
 echo "  Image       : $IMAGE_NAME"
-echo "  Cron        : every 5 minutes"
+echo "  Cron        : every 5 minutes 8 AM-6 PM weekdays, every hour after 6 PM weekdays"
 echo ""
 echo "  Useful commands:"
 echo "    Test run  : docker run --rm -v $DATA_DIR:/data $IMAGE_NAME"
